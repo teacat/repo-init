@@ -14,6 +14,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+var org string
+
 func main() {
 	askStart()
 }
@@ -41,6 +43,9 @@ func askStart() {
 	case 3:
 		askSecret()
 		break
+	case 4:
+		askOrg()
+		break
 	default:
 		os.Exit(0)
 		break
@@ -52,7 +57,7 @@ func askStart() {
 func askAction() (answer int) {
 	prompt := &survey.Select{
 		Message: "你想執行什麼動作？",
-		Options: []string{"新增倉庫", "移除倉庫", "初始化資料夾", "設置 GitHub Secret", "結束"},
+		Options: []string{"新增倉庫", "移除倉庫", "初始化資料夾", "設置 GitHub Secret", "設置組織名稱", "結束"},
 	}
 	survey.AskOne(prompt, &answer)
 	return
@@ -128,9 +133,22 @@ func askInitialization(client *github.Client, repositories []string) {
 	}
 }
 
+//
+func askOrg() {
+	var answer string
+	prompt := &survey.Input{
+		Message: "請輸入欲異動的目標組織名稱，留空則以操作者帳號為主。",
+	}
+	survey.AskOne(prompt, &answer)
+	return
+}
+
 // confirmRepositories
 func confirmRepositories(repositories []string, again bool) (answer bool) {
 	message := fmt.Sprintf("你的行為將會異動下列倉庫，確定要這麼做嗎：%s", strings.Join(repositories, ", "))
+	if org != "" {
+		message = fmt.Sprintf("你的行為將會異動「%s」組織的下列倉庫，確定要這麼做嗎：%s", org, strings.Join(repositories, ", "))
+	}
 	if again {
 		message = fmt.Sprintf("再問一次！你真的要異動這些倉庫嗎：%s", strings.Join(repositories, ", "))
 	}
@@ -144,16 +162,24 @@ func confirmRepositories(repositories []string, again bool) (answer bool) {
 // createRepositories
 func createRepositories(client *github.Client, repositories []string, isPrivate bool) {
 	for _, v := range repositories {
-		client.Repositories.Create(context.Background(), "", &github.Repository{Name: &v, Private: &isPrivate})
+		client.Repositories.Create(context.Background(), org, &github.Repository{Name: &v, Private: &isPrivate})
 		log.Printf("已建立倉庫：%s", v)
 	}
 }
 
+// getName
+func getName(client *github.Client) string {
+	if org != "" {
+		return org
+	}
+	user, _, _ := client.Users.Get(context.Background(), "")
+	return user.GetLogin()
+}
+
 // deleteRepositories
 func deleteRepositories(client *github.Client, repositories []string) {
-	user, _, _ := client.Users.Get(context.Background(), "")
 	for _, v := range repositories {
-		_, err := client.Repositories.Delete(context.Background(), user.GetLogin(), v)
+		_, err := client.Repositories.Delete(context.Background(), getName(client), v)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -163,9 +189,8 @@ func deleteRepositories(client *github.Client, repositories []string) {
 
 // initializeRepositories
 func initializeRepositories(client *github.Client, repositories []string) {
-	user, _, _ := client.Users.Get(context.Background(), "")
 	for _, v := range repositories {
-		repository, _, err := client.Repositories.Get(context.Background(), user.GetLogin(), v)
+		repository, _, err := client.Repositories.Get(context.Background(), getName(client), v)
 		if err != nil {
 			log.Panic(err)
 		}
