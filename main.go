@@ -140,6 +140,7 @@ func askOrg() {
 		Message: "請輸入欲異動的目標組織名稱，留空則以操作者帳號為主。",
 	}
 	survey.AskOne(prompt, &answer)
+	org = answer
 	return
 }
 
@@ -163,7 +164,11 @@ func confirmRepositories(repositories []string, again bool) (answer bool) {
 func createRepositories(client *github.Client, repositories []string, isPrivate bool) {
 	for _, v := range repositories {
 		client.Repositories.Create(context.Background(), org, &github.Repository{Name: &v, Private: &isPrivate})
-		log.Printf("已建立倉庫：%s", v)
+		if org != "" {
+			log.Printf("已建立倉庫：%s/%s", org, v)
+		} else {
+			log.Printf("已建立倉庫：%s", v)
+		}
 	}
 }
 
